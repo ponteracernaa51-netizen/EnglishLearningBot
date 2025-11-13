@@ -31,9 +31,6 @@ WEBHOOK_URL = os.environ.get('WEBHOOK_URL')
 flask_app = Flask(__name__)
 app = WsgiToAsgi(flask_app)
 
-# --- НАШ СОБСТВЕННЫЙ "ВЫКЛЮЧАТЕЛЬ" ---
-PTB_APP_INITIALIZED = False
-
 def setup_application() -> Application:
     if not config.TELEGRAM_TOKEN:
         raise ValueError("TELEGRAM_TOKEN не найден!")
@@ -41,7 +38,6 @@ def setup_application() -> Application:
     application = (
         Application.builder()
         .token(config.TELEGRAM_TOKEN)
-        .post_init(database.connect_db)
         .post_shutdown(database.close_db_pool)
         .build()
     )
@@ -75,28 +71,29 @@ def setup_application() -> Application:
 
 ptb_app = setup_application()
 
+# --- НОВЫЙ БЛОК: ЯВНАЯ ИНИЦИАЛИЗАЦИЯ ПРИ СТАРТЕ ---
+# Gunicorn выполнит этот код один раз при запуске.
+async def startup():
+    """Инициализирует приложение PTB и подключается к базе данных."""
+    await ptb_app.initialize()
+    await database.connect_db()
+    logger.info("Приложение и база данных успешно инициализированы!")
+
+asyncio.run(startup())
+# --- КОНЕЦ НОВОГО БЛОКА ---
+
 @flask_app.route("/")
 def index():
     return "Bot is running!"
 
 @flask_app.route("/webhook", methods=["POST"])
 async def webhook():
-    global PTB_APP_INITIALIZED
-    if not PTB_APP_INITIALIZED:
-        await ptb_app.initialize()
-        PTB_APP_INITIALIZED = True
-        
     update_data = request.get_json()
     update = Update.de_json(update_data, ptb_app.bot)
     await ptb_app.process_update(update)
     return "OK", 200
 
 async def _set_webhook():
-    global PTB_APP_INITIALIZED
-    if not PTB_APP_INITIALIZED:
-        await ptb_app.initialize()
-        PTB_APP_INITIALIZED = True
-        
     webhook_full_url = f"{WEBHOOK_URL}/webhook"
     await ptb_app.bot.set_webhook(url=webhook_full_url, allowed_updates=Update.ALL_TYPES)
     webhook_info = await ptb_app.bot.get_webhook_info()
