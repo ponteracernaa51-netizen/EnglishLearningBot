@@ -13,6 +13,8 @@ from telegram.ext import (
     MessageHandler,
     filters,
 )
+# --- НОВЫЙ ИМПОРТ ---
+from asgiref.wsgi import WsgiToAsgi
 
 import config
 import database
@@ -27,7 +29,12 @@ logger = logging.getLogger(__name__)
 PORT = int(os.environ.get('PORT', 8443))
 WEBHOOK_URL = os.environ.get('WEBHOOK_URL')
 
-app = Flask(__name__)
+# Создаем Flask-приложение как обычно
+flask_app = Flask(__name__)
+
+# --- НОВЫЙ КОД: Оборачиваем Flask-приложение в ASGI-совместимую обертку ---
+# Теперь переменная 'app' - это то, что поймет uvicorn
+app = WsgiToAsgi(flask_app)
 
 def setup_application() -> Application:
     if not config.TELEGRAM_TOKEN:
@@ -69,15 +76,13 @@ def setup_application() -> Application:
     return application
 
 ptb_app = setup_application()
-
-# Инициализируем приложение перед запуском веб-сервера.
 asyncio.run(ptb_app.initialize())
 
-@app.route("/")
+@flask_app.route("/")
 def index():
     return "Bot is running!"
 
-@app.route("/webhook", methods=["POST"])
+@flask_app.route("/webhook", methods=["POST"])
 async def webhook():
     update_data = request.get_json()
     update = Update.de_json(update_data, ptb_app.bot)
@@ -85,13 +90,12 @@ async def webhook():
     return "OK", 200
 
 async def _set_webhook():
-    """Асинхронная helper-функция для установки и проверки вебхука."""
     webhook_full_url = f"{WEBHOOK_URL}/webhook"
     await ptb_app.bot.set_webhook(url=webhook_full_url, allowed_updates=Update.ALL_TYPES)
     webhook_info = await ptb_app.bot.get_webhook_info()
     return webhook_info
 
-@app.route("/set_webhook")
+@flask_app.route("/set_webhook")
 def set_webhook_route():
     if not WEBHOOK_URL:
         return "Ошибка: WEBHOOK_URL не задан!", 500
@@ -100,6 +104,5 @@ def set_webhook_route():
         logger.info(f"Вебхук успешно установлен через эндпоинт: {webhook_info.url}")
         return f"Вебхук успешно установлен на: {webhook_info.url}", 200
     except Exception as e:
-        # --- ИСПРАВЛЕННАЯ СТРОКА ЗДЕСЬ ---
         logger.error(f"Ошибка при установке вебхука: {e}")
         return f"Произошла ошибка: {e}", 500
