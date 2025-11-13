@@ -13,7 +13,7 @@ try:
     
     genai.configure(api_key=config.GEMINI_API_KEY)
     
-    model = genai.GenerativeModel('gemini-pro-latest')
+    model = genai.GenerativeModel('gemini-1.5-flash-latest')
     logger.info(f"Модель Gemini '{model.model_name}' успешно инициализирована.")
 
 except (ValueError, Exception) as e:
@@ -67,4 +67,5 @@ async def check_translation(
         return json.dumps({"error": "Не удалось обработать ответ от AI."})
     except Exception as e:
         logger.error(f"Ошибка при вызове Gemini API: {e}", exc_info=True)
+
         return json.dumps({"error": "Произошла ошибка при проверке перевода."})
