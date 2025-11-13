@@ -1,26 +1,8 @@
-# requirements.txt
-
-# Указываем, что Flask нужен с поддержкой async
-Flask[async]
-
-# Основная библиотека для работы с Telegram
+fastapi
 python-telegram-bot
-
-# Драйвер для работы с PostgreSQL
 psycopg
-
-# Менеджер пула соединений
 psycopg-pool
-
-# Для загрузки переменных окружения
 python-dotenv
-
-# Для работы с API Gemini
 google-generativeai
-
-# Производственный веб-сервер
 gunicorn
-
-# --- НОВЫЙ КОМПОНЕНТ ---
-# Асинхронный 'рабочий' для gunicorn
 uvicorn
