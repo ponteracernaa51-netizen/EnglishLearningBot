@@ -13,7 +13,6 @@ from telegram.ext import (
     MessageHandler,
     filters,
 )
-# --- НОВЫЙ ИМПОРТ ---
 from asgiref.wsgi import WsgiToAsgi
 
 import config
@@ -29,11 +28,7 @@ logger = logging.getLogger(__name__)
 PORT = int(os.environ.get('PORT', 8443))
 WEBHOOK_URL = os.environ.get('WEBHOOK_URL')
 
-# Создаем Flask-приложение как обычно
 flask_app = Flask(__name__)
-
-# --- НОВЫЙ КОД: Оборачиваем Flask-приложение в ASGI-совместимую обертку ---
-# Теперь переменная 'app' - это то, что поймет uvicorn
 app = WsgiToAsgi(flask_app)
 
 def setup_application() -> Application:
@@ -76,7 +71,9 @@ def setup_application() -> Application:
     return application
 
 ptb_app = setup_application()
-asyncio.run(ptb_app.initialize())
+
+# Мы убрали строку asyncio.run(ptb_app.initialize()) отсюда.
+# Uvicorn сам будет управлять циклом событий.
 
 @flask_app.route("/")
 def index():
@@ -84,12 +81,20 @@ def index():
 
 @flask_app.route("/webhook", methods=["POST"])
 async def webhook():
+    # Инициализируем приложение при первом запросе, если оно еще не готово
+    if not ptb_app.initialized:
+        await ptb_app.initialize()
+        
     update_data = request.get_json()
     update = Update.de_json(update_data, ptb_app.bot)
     await ptb_app.process_update(update)
     return "OK", 200
 
 async def _set_webhook():
+    # Инициализируем приложение перед установкой вебхука
+    if not ptb_app.initialized:
+        await ptb_app.initialize()
+        
     webhook_full_url = f"{WEBHOOK_URL}/webhook"
     await ptb_app.bot.set_webhook(url=webhook_full_url, allowed_updates=Update.ALL_TYPES)
     webhook_info = await ptb_app.bot.get_webhook_info()
