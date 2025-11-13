@@ -70,6 +70,12 @@ def setup_application() -> Application:
 
 ptb_app = setup_application()
 
+# --- ВАЖНОЕ ИЗМЕНЕНИЕ ЗДЕСЬ ---
+# Инициализируем приложение перед запуском веб-сервера.
+# Gunicorn выполнит этот код при импорте файла.
+asyncio.run(ptb_app.initialize())
+# --- КОНЕЦ ИЗМЕНЕНИЯ ---
+
 @app.route("/")
 def index():
     return "Bot is running!"
@@ -81,9 +87,7 @@ async def webhook():
     await ptb_app.process_update(update)
     return "OK", 200
 
-# --- ИСПРАВЛЕННАЯ ВЕРСИЯ ЭТОЙ ФУНКЦИИ ---
 async def _set_webhook():
-    """Асинхронная helper-функция для установки и проверки вебхука."""
     webhook_full_url = f"{WEBHOOK_URL}/webhook"
     await ptb_app.bot.set_webhook(url=webhook_full_url, allowed_updates=Update.ALL_TYPES)
     webhook_info = await ptb_app.bot.get_webhook_info()
@@ -94,10 +98,8 @@ def set_webhook_route():
     if not WEBHOOK_URL:
         return "Ошибка: WEBHOOK_URL не задан!", 500
     try:
-        # Запускаем всю асинхронную логику в одном вызове asyncio.run()
         webhook_info = asyncio.run(_set_webhook())
         logger.info(f"Вебхук успешно установлен через эндпоинт: {webhook_info.url}")
         return f"Вебхук успешно установлен на: {webhook_info.url}", 200
     except Exception as e:
-        logger.error(f"Ошибка при установке вебхука: {e}")
-        return f"Произошла ошибка: {e}", 500
+        logger.error(f"Ошибка
