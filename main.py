@@ -31,6 +31,9 @@ WEBHOOK_URL = os.environ.get('WEBHOOK_URL')
 flask_app = Flask(__name__)
 app = WsgiToAsgi(flask_app)
 
+# --- НАШ СОБСТВЕННЫЙ "ВЫКЛЮЧАТЕЛЬ" ---
+PTB_APP_INITIALIZED = False
+
 def setup_application() -> Application:
     if not config.TELEGRAM_TOKEN:
         raise ValueError("TELEGRAM_TOKEN не найден!")
@@ -72,18 +75,16 @@ def setup_application() -> Application:
 
 ptb_app = setup_application()
 
-# Мы убрали строку asyncio.run(ptb_app.initialize()) отсюда.
-# Uvicorn сам будет управлять циклом событий.
-
 @flask_app.route("/")
 def index():
     return "Bot is running!"
 
 @flask_app.route("/webhook", methods=["POST"])
 async def webhook():
-    # Инициализируем приложение при первом запросе, если оно еще не готово
-    if not ptb_app.initialized:
+    global PTB_APP_INITIALIZED
+    if not PTB_APP_INITIALIZED:
         await ptb_app.initialize()
+        PTB_APP_INITIALIZED = True
         
     update_data = request.get_json()
     update = Update.de_json(update_data, ptb_app.bot)
@@ -91,9 +92,10 @@ async def webhook():
     return "OK", 200
 
 async def _set_webhook():
-    # Инициализируем приложение перед установкой вебхука
-    if not ptb_app.initialized:
+    global PTB_APP_INITIALIZED
+    if not PTB_APP_INITIALIZED:
         await ptb_app.initialize()
+        PTB_APP_INITIALIZED = True
         
     webhook_full_url = f"{WEBHOOK_URL}/webhook"
     await ptb_app.bot.set_webhook(url=webhook_full_url, allowed_updates=Update.ALL_TYPES)
