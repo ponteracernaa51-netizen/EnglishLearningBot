@@ -3,7 +3,7 @@
 import logging
 import asyncio
 import os
-from flask import Flask, request
+from fastapi import FastAPI, Request
 from telegram import Update
 from telegram.ext import (
     Application,
@@ -13,7 +13,7 @@ from telegram.ext import (
     MessageHandler,
     filters,
 )
-from asgiref.wsgi import WsgiToAsgi
+from contextlib import asynccontextmanager
 
 import config
 import database
@@ -25,11 +25,7 @@ logging.basicConfig(
 logging.getLogger("httpx").setLevel(logging.WARNING)
 logger = logging.getLogger(__name__)
 
-PORT = int(os.environ.get('PORT', 8443))
 WEBHOOK_URL = os.environ.get('WEBHOOK_URL')
-
-flask_app = Flask(__name__)
-app = WsgiToAsgi(flask_app)
 
 def setup_application() -> Application:
     if not config.TELEGRAM_TOKEN:
@@ -38,7 +34,6 @@ def setup_application() -> Application:
     application = (
         Application.builder()
         .token(config.TELEGRAM_TOKEN)
-        .post_shutdown(database.close_db_pool)
         .build()
     )
 
@@ -71,42 +66,35 @@ def setup_application() -> Application:
 
 ptb_app = setup_application()
 
-# --- НОВЫЙ БЛОК: ЯВНАЯ ИНИЦИАЛИЗАЦИЯ ПРИ СТАРТЕ ---
-# Gunicorn выполнит этот код один раз при запуске.
-async def startup():
-    """Инициализирует приложение PTB и подключается к базе данных."""
+@asynccontextmanager
+async def lifespan(app: FastAPI):
+    """Выполняется один раз при старте и один раз при остановке сервера."""
+    logger.info("Запуск приложения...")
     await ptb_app.initialize()
     await database.connect_db()
-    logger.info("Приложение и база данных успешно инициализированы!")
+    
+    if WEBHOOK_URL:
+        await ptb_app.bot.set_webhook(url=f"{WEBHOOK_URL}/webhook", allowed_updates=Update.ALL_TYPES)
+        logger.info(f"Вебхук успешно установлен на: {WEBHOOK_URL}/webhook")
+    else:
+        logger.warning("WEBHOOK_URL не задан, вебхук не будет установлен!")
+    
+    yield  # Приложение работает здесь
+    
+    logger.info("Остановка приложения...")
+    await database.close_db_pool()
+    await ptb_app.shutdown()
 
-asyncio.run(startup())
-# --- КОНЕЦ НОВОГО БЛОКА ---
+# Создаем FastAPI приложение с жизненным циклом
+app = FastAPI(lifespan=lifespan)
 
-@flask_app.route("/")
+@app.get("/")
 def index():
-    return "Bot is running!"
+    return {"status": "Bot is running!"}
 
-@flask_app.route("/webhook", methods=["POST"])
-async def webhook():
-    update_data = request.get_json()
+@app.post("/webhook")
+async def webhook(request: Request):
+    update_data = await request.json()
     update = Update.de_json(update_data, ptb_app.bot)
     await ptb_app.process_update(update)
-    return "OK", 200
-
-async def _set_webhook():
-    webhook_full_url = f"{WEBHOOK_URL}/webhook"
-    await ptb_app.bot.set_webhook(url=webhook_full_url, allowed_updates=Update.ALL_TYPES)
-    webhook_info = await ptb_app.bot.get_webhook_info()
-    return webhook_info
-
-@flask_app.route("/set_webhook")
-def set_webhook_route():
-    if not WEBHOOK_URL:
-        return "Ошибка: WEBHOOK_URL не задан!", 500
-    try:
-        webhook_info = asyncio.run(_set_webhook())
-        logger.info(f"Вебхук успешно установлен через эндпоинт: {webhook_info.url}")
-        return f"Вебхук успешно установлен на: {webhook_info.url}", 200
-    except Exception as e:
-        logger.error(f"Ошибка при установке вебхука: {e}")
-        return f"Произошла ошибка: {e}", 500
+    return {"status": "ok"}
