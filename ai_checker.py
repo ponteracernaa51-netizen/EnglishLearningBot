@@ -13,7 +13,7 @@ try:
     
     genai.configure(api_key=config.GEMINI_API_KEY)
     
-    model = genai.GenerativeModel('gemini-1.5-flash-latest')
+    model = genai.GenerativeModel('gemini-flash-latest')
     logger.info(f"Модель Gemini '{model.model_name}' успешно инициализирована.")
 
 except (ValueError, Exception) as e:
