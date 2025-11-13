@@ -81,19 +81,27 @@ async def webhook():
     await ptb_app.process_update(update)
     return "OK", 200
 
-# --- НОВЫЙ СЕКРЕТНЫЙ ЭНДПОИНТ ДЛЯ УСТАНОВКИ ВЕБХУКА ---
+# --- ИСПРАВЛЕННАЯ ВЕРСИЯ ЭТОЙ ФУНКЦИИ ---
 @app.route("/set_webhook")
-async def set_webhook_route():
+def set_webhook_route():
+    """
+    Синхронный эндпоинт, который запускает асинхронную задачу установки вебхука.
+    """
     if not WEBHOOK_URL:
         return "Ошибка: WEBHOOK_URL не задан в переменных окружения!", 500
-    
-    webhook_full_url = f"{WEBHOOK_URL}/webhook"
-    await ptb_app.bot.set_webhook(url=webhook_full_url, allowed_updates=Update.ALL_TYPES)
-    
-    # Проверяем, что вебхук действительно установился
-    webhook_info = await ptb_app.bot.get_webhook_info()
-    
-    return f"Вебхук установлен на: {webhook_info.url}", 200
 
-# --- УДАЛЯЕМ СТАРЫЙ БЛОК if __name__ == "__main__" ---
-# Он нам больше не нужен, gunicorn будет запускать 'app' напрямую.
+    # Создаем и запускаем асинхронную задачу из синхронного контекста Flask
+    try:
+        webhook_full_url = f"{WEBHOOK_URL}/webhook"
+        
+        # Запускаем асинхронную функцию и ждем ее завершения
+        asyncio.run(ptb_app.bot.set_webhook(url=webhook_full_url, allowed_updates=Update.ALL_TYPES))
+        
+        # Проверяем, что вебхук действительно установился
+        webhook_info = asyncio.run(ptb_app.bot.get_webhook_info())
+        
+        logger.info(f"Вебхук успешно установлен через эндпоинт: {webhook_info.url}")
+        return f"Вебхук успешно установлен на: {webhook_info.url}", 200
+    except Exception as e:
+        logger.error(f"Ошибка при установке вебхука: {e}")
+        return f"Произошла ошибка: {e}", 500
