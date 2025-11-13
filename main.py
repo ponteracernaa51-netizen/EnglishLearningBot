@@ -82,24 +82,20 @@ async def webhook():
     return "OK", 200
 
 # --- ИСПРАВЛЕННАЯ ВЕРСИЯ ЭТОЙ ФУНКЦИИ ---
+async def _set_webhook():
+    """Асинхронная helper-функция для установки и проверки вебхука."""
+    webhook_full_url = f"{WEBHOOK_URL}/webhook"
+    await ptb_app.bot.set_webhook(url=webhook_full_url, allowed_updates=Update.ALL_TYPES)
+    webhook_info = await ptb_app.bot.get_webhook_info()
+    return webhook_info
+
 @app.route("/set_webhook")
 def set_webhook_route():
-    """
-    Синхронный эндпоинт, который запускает асинхронную задачу установки вебхука.
-    """
     if not WEBHOOK_URL:
-        return "Ошибка: WEBHOOK_URL не задан в переменных окружения!", 500
-
-    # Создаем и запускаем асинхронную задачу из синхронного контекста Flask
+        return "Ошибка: WEBHOOK_URL не задан!", 500
     try:
-        webhook_full_url = f"{WEBHOOK_URL}/webhook"
-        
-        # Запускаем асинхронную функцию и ждем ее завершения
-        asyncio.run(ptb_app.bot.set_webhook(url=webhook_full_url, allowed_updates=Update.ALL_TYPES))
-        
-        # Проверяем, что вебхук действительно установился
-        webhook_info = asyncio.run(ptb_app.bot.get_webhook_info())
-        
+        # Запускаем всю асинхронную логику в одном вызове asyncio.run()
+        webhook_info = asyncio.run(_set_webhook())
         logger.info(f"Вебхук успешно установлен через эндпоинт: {webhook_info.url}")
         return f"Вебхук успешно установлен на: {webhook_info.url}", 200
     except Exception as e:
