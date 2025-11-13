@@ -1,5 +1,8 @@
 # requirements.txt
 
+# Указываем, что Flask нужен с поддержкой async
+Flask[async]
+
 # Основная библиотека для работы с Telegram
 python-telegram-bot
 
@@ -15,9 +18,5 @@ python-dotenv
 # Для работы с API Gemini
 google-generativeai
 
-# --- НОВЫЕ ЗАВИСИМОСТИ ДЛЯ ВЕБ-СЕРВИСА ---
-# Простой веб-фреймворк
-Flask
-
-# Производственный веб-сервер для запуска Flask на Render
+# Производственный веб-сервер
 gunicorn
